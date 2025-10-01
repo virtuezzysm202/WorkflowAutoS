@@ -1,0 +1,11 @@
+[package]
+name = "local-automation-orchestrator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+local-automation-common = { path = "../common" } 
+local-automation-executor = { path = "../executor" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
