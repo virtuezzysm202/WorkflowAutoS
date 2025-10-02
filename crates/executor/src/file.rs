@@ -49,8 +49,12 @@ impl Executor for FileExecutor {
         
         match task.operation.as_str() {
             "read" => self.read_file(task).await,
+            "read_csv" => self.read_csv(task).await,
+            "read_json" => self.read_json(task).await,
             "write" => self.write_file(task).await,
             "delete" => self.delete_file(task).await,
+            "move" => self.move_file(task).await,
+            "copy" => self.copy_file(task).await,
             "list" => self.list_dir(task).await,
             _ => Err(Error::InvalidConfig(
                 format!("Unknown operation: {}", task.operation)
@@ -76,6 +80,74 @@ impl FileExecutor {
         Ok(ExecutionResult {
             success: true,
             output: Some(serde_json::json!({ "content": content })),
+            error: None,
+        })
+    }
+
+    async fn read_csv(&self, task: &Task) -> Result<ExecutionResult> {
+        #[derive(Deserialize)]
+        struct Params {
+            path: String,
+        }
+        
+        let params: Params = serde_json::from_value(task.params.clone())
+            .map_err(|e| Error::InvalidConfig(e.to_string()))?;
+        
+        let full_path = self.resolve_path(&params.path)?;
+        let content = fs::read_to_string(&full_path).await?;
+        
+        let mut reader = csv::Reader::from_reader(content.as_bytes());
+        
+        //Get headers
+        let headers: Vec<String> = reader
+            .headers()
+            .map_err(|e| Error::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                e.to_string()
+            )))?
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        
+        //Get data rows (without headers)
+        let mut rows = Vec::new();
+        for result in reader.records() {
+            let record = result.map_err(|e| Error::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                e.to_string()
+            )))?;
+            
+            let row: Vec<String> = record.iter().map(|s| s.to_string()).collect();
+            rows.push(row);
+        }
+        
+        //Return both headers and rows
+        Ok(ExecutionResult {
+            success: true,
+            output: Some(serde_json::json!({
+                "headers": headers,
+                "rows": rows
+            })),
+            error: None,
+        })
+    }
+
+    async fn read_json(&self, task: &Task) -> Result<ExecutionResult> {
+        #[derive(Deserialize)]
+        struct Params {
+            path: String,
+        }
+        
+        let params: Params = serde_json::from_value(task.params.clone())
+            .map_err(|e| Error::InvalidConfig(e.to_string()))?;
+        
+        let full_path = self.resolve_path(&params.path)?;
+        let content = fs::read_to_string(&full_path).await?;
+        let json: serde_json::Value = serde_json::from_str(&content)?;
+        
+        Ok(ExecutionResult {
+            success: true,
+            output: Some(json),
             error: None,
         })
     }
@@ -115,6 +187,56 @@ impl FileExecutor {
         Ok(ExecutionResult {
             success: true,
             output: None,
+            error: None,
+        })
+    }
+
+    async fn copy_file(&self, task: &Task) -> Result<ExecutionResult> {
+        #[derive(Deserialize)]
+        struct Params {
+            from: String,
+            to: String,
+        }
+        
+        let params: Params = serde_json::from_value(task.params.clone())
+        .map_err(|e| Error::InvalidConfig(e.to_string()))?;
+    
+    let from_path = self.resolve_path(&params.from)?;
+    let to_path = self.resolve_path(&params.to)?;
+    
+    fs::copy(&from_path, &to_path).await?;
+    
+    Ok(ExecutionResult {
+        success: true,
+        output: Some(serde_json::json!({
+            "from": from_path,
+            "to": to_path
+        })),
+        error: None,
+    })
+    }
+
+    async fn move_file(&self, task: &Task) -> Result<ExecutionResult> {
+        #[derive(Deserialize)]
+        struct Params {
+            from: String,
+            to: String,
+        }
+
+        let params:Params = serde_json::from_value(task.params.clone())
+            .map_err(|e| Error::InvalidConfig(e.to_string()))?;
+
+        let from_path = self.resolve_path(&params.from)?;
+        let to_path = self.resolve_path(&params.to)?;
+
+        fs::rename(&from_path, &to_path).await?;
+
+        Ok(ExecutionResult {
+            success: true,
+            output: Some(serde_json::json!({
+                "from": from_path,
+                "to": to_path
+            })),
             error: None,
         })
     }
