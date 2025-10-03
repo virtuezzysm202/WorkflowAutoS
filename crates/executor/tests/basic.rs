@@ -130,4 +130,59 @@ async fn test_all_file_operations() {
     println!("Read CSV file test passed");
     println!("Headers: {:?}", headers);
     println!("Rows: {:?}", rows);
+
+    // 11. Create directory
+    let create_dir_task = Task::new(
+    "file".to_string(),
+    "create_dir".to_string(),
+    json!({ "path": "subdir" }),
+    );
+    let create_dir_result = executor.execute(&create_dir_task).await.unwrap();
+    assert!(create_dir_result.success);
+    println!("Create directory test passed");
+
+    // 12. Exists (true)
+    let exists_task = Task::new(
+    "file".to_string(),
+    "exists".to_string(),
+    json!({ "path": "data.csv" }),
+    );
+    let exists_result = executor.execute(&exists_task).await.unwrap();
+    assert_eq!(exists_result.output.unwrap()["exists"], true);
+    println!("Exists test (true) passed");
+
+// 13. Exists (false)
+    let not_exists_task = Task::new(
+    "file".to_string(),
+    "exists".to_string(),
+    json!({ "path": "missing.txt" }),
+    );
+    let not_exists_result = executor.execute(&not_exists_task).await.unwrap();
+    assert_eq!(not_exists_result.output.unwrap()["exists"], false);
+    println!("Exists test (false) passed");
+
+// 14. Write JSON via write_json
+    let write_json_task = Task::new(
+    "file".to_string(),
+    "write_json".to_string(),
+    json!({ "path": "data2.json", "data": { "foo": "bar" } }),
+    );
+    executor.execute(&write_json_task).await.unwrap();
+    println!("Write JSON (via write_json) test passed");
+
+// 15. Write CSV via write_csv
+    let write_csv_task = Task::new(
+    "file".to_string(),
+    "write_csv".to_string(),
+    json!({
+        "path": "data2.csv",
+        "headers": ["id", "score"],
+        "rows": [
+            ["1", "90"],
+            ["2", "85"]
+        ]
+    }),
+);
+executor.execute(&write_csv_task).await.unwrap();
+println!("Write CSV (via write_csv) test passed");
 }
